@@ -121,6 +121,9 @@ impl<'a> Paragraph<'a> {
                 ParagraphContent::Run(r) => {
                     r.replace_text(dic)?;
                 }
+                ParagraphContent::Link(link) => {
+                    link.replace_text(dic)?;
+                }
                 _ => {}
             }
         }
