@@ -61,11 +61,15 @@ fn analyze_sample_docx_files() {
                             }
                             
                             // Show each run in the hyperlink
-                            for (run_idx, run) in hyperlink.content.iter().enumerate() {
-                                let run_text = run.text();
-                                if !run_text.is_empty() {
-                                    println!("     Run {}: \"{}\"", run_idx, 
-                                            truncate_text(&run_text, 30));
+                            for (run_idx, content) in hyperlink.content.iter().enumerate() {
+                                match content {
+                                    document::HyperlinkContent::Run(run) => {
+                                        let run_text = run.text();
+                                        if !run_text.is_empty() {
+                                            println!("     Run {}: \"{}\"", run_idx, 
+                                                    truncate_text(&run_text, 30));
+                                        }
+                                    }
                                 }
                             }
                             

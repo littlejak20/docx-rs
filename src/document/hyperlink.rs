@@ -2,6 +2,7 @@
 
 use hard_xml::{XmlRead, XmlWrite};
 use std::borrow::Cow;
+use derive_more::From;
 
 use crate::{__setter, __xml_test_suites, document::bidir::BidirectionalEmbedding, document::Run, document::Text};
 
@@ -33,6 +34,15 @@ use crate::{__setter, __xml_test_suites, document::bidir::BidirectionalEmbedding
 ///     .push_run(Run::default().push_text("..."))   // Dots
 ///     .push_run(Run::default().push_text("5"));    // Page number
 /// ```
+
+/// Content types that can appear within a hyperlink
+#[derive(Debug, From, XmlRead, XmlWrite, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum HyperlinkContent<'a> {
+    /// A run of text with formatting
+    #[xml(tag = "w:r")]
+    Run(Run<'a>),
+}
 #[derive(Debug, Default, XmlRead, XmlWrite, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 #[xml(tag = "w:hyperlink")]
@@ -45,7 +55,7 @@ pub struct Hyperlink<'a> {
     pub anchor: Option<Cow<'a, str>>,
     #[xml(child = "w:r")]
     /// Link content - supports multiple runs for complex hyperlinks
-    pub content: Vec<Run<'a>>,
+    pub content: Vec<HyperlinkContent<'a>>,
     #[xml(child = "w:dir")]
     // Link can contain a bi-directional embedding layer
     pub bidirectional_embedding: Option<BidirectionalEmbedding<'a>>,
@@ -58,30 +68,34 @@ impl<'a> Hyperlink<'a> {
 
     /// Add a Run element to the hyperlink content
     pub fn push_run(mut self, run: Run<'a>) -> Self {
-        self.content.push(run);
+        self.content.push(HyperlinkContent::Run(run));
         self
     }
     
     /// Add text as a new Run to the hyperlink content
     pub fn add_text<T: Into<Text<'a>>>(mut self, text: T) -> Self {
-        self.content.push(Run::default().push_text(text));
+        self.content.push(HyperlinkContent::Run(Run::default().push_text(text)));
         self
     }
     
     /// Get the first run (for backward compatibility)
     pub fn first_run(&self) -> Option<&Run<'a>> {
-        self.content.first()
+        self.content.first().and_then(|content| match content {
+            HyperlinkContent::Run(run) => Some(run),
+        })
     }
     
     /// Get mutable reference to the first run (for backward compatibility)
     pub fn first_run_mut(&mut self) -> Option<&mut Run<'a>> {
-        self.content.first_mut()
+        self.content.first_mut().and_then(|content| match content {
+            HyperlinkContent::Run(run) => Some(run),
+        })
     }
     
     /// Create hyperlink from a single run (migration helper)
     pub fn from_single_run(run: Run<'a>) -> Self {
         Self {
-            content: vec![run],
+            content: vec![HyperlinkContent::Run(run)],
             ..Default::default()
         }
     }
@@ -93,8 +107,10 @@ impl<'a> Hyperlink<'a> {
         T: IntoIterator<Item = I> + Copy,
         I: std::borrow::Borrow<(S, S)>,
     {
-        for run in self.content.iter_mut() {
-            run.replace_text(dic)?;
+        for content in self.content.iter_mut() {
+            match content {
+                HyperlinkContent::Run(run) => run.replace_text(dic)?,
+            }
         }
         Ok(())
     }
@@ -104,8 +120,10 @@ impl<'a> Hyperlink<'a> {
     where
         S: AsRef<str>,
     {
-        for run in self.content.iter_mut() {
-            run.replace_text_simple(&old, &new);
+        for content in self.content.iter_mut() {
+            match content {
+                HyperlinkContent::Run(run) => run.replace_text_simple(&old, &new),
+            }
         }
     }
 
@@ -118,7 +136,9 @@ impl<'a> Hyperlink<'a> {
 
     pub fn iter_text(&self) -> Box<dyn Iterator<Item = &Cow<'a, str>> + '_> {
         Box::new(
-            self.content.iter().flat_map(|run| run.iter_text()).chain(
+            self.content.iter().flat_map(|content| match content {
+                HyperlinkContent::Run(run) => run.iter_text(),
+            }).chain(
                 self.bidirectional_embedding
                     .iter()
                     .flat_map(|bidi| bidi.iter_text()),
@@ -130,7 +150,9 @@ impl<'a> Hyperlink<'a> {
         Box::new(
             self.content
                 .iter_mut()
-                .flat_map(|run| run.iter_text_mut())
+                .flat_map(|content| match content {
+                    HyperlinkContent::Run(run) => run.iter_text_mut(),
+                })
                 .chain(
                     self.bidirectional_embedding
                         .iter_mut()
@@ -159,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_multiple_runs() {
-        let mut hyperlink = Hyperlink::default()
+        let hyperlink = Hyperlink::default()
             .push_run(Run::default().push_text("First "))
             .push_run(Run::default().push_text("Second"));
         

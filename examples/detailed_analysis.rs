@@ -72,12 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // Multi-Run Details
                             if run_count > 1 {
                                 println!("      🎯 Multi-Run Hyperlink!");
-                                for (run_idx, run) in hyperlink.content.iter().enumerate() {
-                                    let run_text = run.text();
-                                    if !run_text.is_empty() {
-                                        println!("         Run {}: \"{}\"", 
-                                                run_idx + 1, 
-                                                truncate_text(&run_text, 20));
+                                for (run_idx, content) in hyperlink.content.iter().enumerate() {
+                                    match content {
+                                        document::HyperlinkContent::Run(run) => {
+                                            let run_text = run.text();
+                                            if !run_text.is_empty() {
+                                                println!("         Run {}: \"{}\"", 
+                                                        run_idx + 1, 
+                                                        truncate_text(&run_text, 20));
+                                            }
+                                        }
                                     }
                                 }
                             }
