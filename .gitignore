@@ -1,8 +1,39 @@
 /target/
 **/*.rs.bk
-*.docx
 Cargo.lock
 .DS_Store
+
+# Verarbeitete und Test DOCX-Dateien
+*-processed.docx
+test.docx
+test-*.docx
+output/
+
+# Entpackte DOCX-Inhalte (ZIP-Struktur)
+docx-extracted/
+docx-temp/
+
+# Entpackte DOCX-Ordner (spezifische ignorierte Ordner)
+docx/hyperlink/bigger/hyperlink-bigger/
+docx/toc/simple/inhaltsverzeichnis-simple/
+# Weitere entpackte Ordner hier hinzufügen
+
+# DOCX-interne Dateien und Ordner
+**/[Content_Types].xml
+**/word/
+**/xl/
+**/_rels/
+**/docProps/
+**/customXml/
+
+# Temporäre Dateien
+*.tmp
+*.temp
+~$*.docx
+
+# Pipeline-Artefakte und Test-Dateien
+artifact-*.txt
+artifact-*.docx
 
 # IDE
 .vscode/
