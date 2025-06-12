@@ -59,7 +59,7 @@ impl<'a> Drawing<'a> {
     }
 }
 
-#[derive(Debug, Default, XmlRead, XmlWrite, Clone)]
+#[derive(Debug, Default, XmlRead, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 #[xml(tag = "wp:anchor")]
 pub struct Anchor<'a> {
@@ -104,6 +104,73 @@ pub struct Anchor<'a> {
     pub doc_property: DocPr<'a>,
     #[xml(child = "a:graphic")]
     pub graphic: Option<Graphic<'a>>,
+}
+
+impl<'a> XmlWrite for Anchor<'a> {
+    fn to_writer<W: std::io::Write>(&self, writer: &mut hard_xml::XmlWriter<W>) -> hard_xml::XmlResult<()> {
+        
+        writer.write_element_start("wp:anchor")?;
+        
+        // Numeric attributes
+        if let Some(dist_t) = self.dist_t {
+            writer.write_attribute("distT", &dist_t.to_string())?;
+        }
+        if let Some(dist_b) = self.dist_b {
+            writer.write_attribute("distB", &dist_b.to_string())?;
+        }
+        if let Some(dist_l) = self.dist_l {
+            writer.write_attribute("distL", &dist_l.to_string())?;
+        }
+        if let Some(dist_r) = self.dist_r {
+            writer.write_attribute("distR", &dist_r.to_string())?;
+        }
+        if let Some(simple_pos_attr) = self.simple_pos_attr {
+            writer.write_attribute("simplePos", &simple_pos_attr.to_string())?;
+        }
+        if let Some(relative_height) = self.relative_height {
+            writer.write_attribute("relativeHeight", &relative_height.to_string())?;
+        }
+        
+        // OOXML Boolean attributes (0/1 instead of true/false)
+        if let Some(behind_doc) = self.behind_doc {
+            writer.write_attribute("behindDoc", if behind_doc { "1" } else { "0" })?;
+        }
+        if let Some(locked) = self.locked {
+            writer.write_attribute("locked", if locked { "1" } else { "0" })?;
+        }
+        if let Some(layout_in_cell) = self.layout_in_cell {
+            writer.write_attribute("layoutInCell", if layout_in_cell { "1" } else { "0" })?;
+        }
+        if let Some(allow_overlap) = self.allow_overlap {
+            writer.write_attribute("allowOverlap", if allow_overlap { "1" } else { "0" })?;
+        }
+        
+        writer.write_element_end_open()?;
+        
+        // Child elements
+        if let Some(simple_pos) = &self.simple_pos {
+            simple_pos.to_writer(writer)?;
+        }
+        if let Some(position_horizontal) = &self.position_horizontal {
+            position_horizontal.to_writer(writer)?;
+        }
+        if let Some(position_vertical) = &self.position_vertical {
+            position_vertical.to_writer(writer)?;
+        }
+        if let Some(extent) = &self.extent {
+            extent.to_writer(writer)?;
+        }
+        if let Some(wrap) = &self.wrap {
+            wrap.to_writer(writer)?;
+        }
+        self.doc_property.to_writer(writer)?;
+        if let Some(graphic) = &self.graphic {
+            graphic.to_writer(writer)?;
+        }
+        
+        writer.write_element_end_close("wp:anchor")?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, From, XmlRead, XmlWrite, Clone)]
