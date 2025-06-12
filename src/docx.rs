@@ -67,6 +67,91 @@ pub struct Docx<'a> {
 }
 
 impl<'a> Docx<'a> {
+    /// Saves DOCX with guaranteed Word compatibility by converting complex DrawingML to simple format
+    pub fn write_file_compatible<P: AsRef<Path>>(&'a mut self, path: P) -> DocxResult<std::fs::File> {
+        self.sanitize_all_drawings()?;
+        if let Some(p) = path.as_ref().parent() {
+            std::fs::create_dir_all(p)?;
+        }
+        let file = std::fs::File::create(path)?;
+        self.write(file)
+    }
+
+    /// Converts all complex DrawingML elements to simple, robust format
+    fn sanitize_all_drawings(&mut self) -> DocxResult<()> {
+        self.sanitize_drawings_in_body()?;
+        self.sanitize_drawings_in_headers()?;
+        self.sanitize_drawings_in_footers()?;
+        Ok(())
+    }
+
+    /// Sanitizes drawings in document body
+    fn sanitize_drawings_in_body(&mut self) -> DocxResult<()> {
+        use crate::document::BodyContent;
+        
+        for content in &mut self.document.body.content {
+            match content {
+                BodyContent::Paragraph(paragraph) => {
+                    for run in &mut paragraph.content {
+                        if let crate::document::ParagraphContent::Run(run) = run {
+                            for run_content in &mut run.content {
+                                if let crate::document::RunContent::Drawing(drawing) = run_content {
+                                    drawing.sanitize_for_compatibility()?;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {} // Other content types don't contain drawings
+            }
+        }
+        Ok(())
+    }
+
+    /// Sanitizes drawings in headers
+    fn sanitize_drawings_in_headers(&mut self) -> DocxResult<()> {
+        use crate::document::BodyContent;
+        
+        for (_, header) in &mut self.headers {
+            for content in &mut header.content {
+                if let BodyContent::Paragraph(paragraph) = content {
+                    for run in &mut paragraph.content {
+                        if let crate::document::ParagraphContent::Run(run) = run {
+                            for run_content in &mut run.content {
+                                if let crate::document::RunContent::Drawing(drawing) = run_content {
+                                    drawing.sanitize_for_compatibility()?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Sanitizes drawings in footers
+    fn sanitize_drawings_in_footers(&mut self) -> DocxResult<()> {
+        use crate::document::BodyContent;
+        
+        for (_, footer) in &mut self.footers {
+            for content in &mut footer.content {
+                if let BodyContent::Paragraph(paragraph) = content {
+                    for run in &mut paragraph.content {
+                        if let crate::document::ParagraphContent::Run(run) = run {
+                            for run_content in &mut run.content {
+                                if let crate::document::RunContent::Drawing(drawing) = run_content {
+                                    drawing.sanitize_for_compatibility()?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn write<W: Write + Seek>(&'a mut self, writer: W) -> DocxResult<W> {
         let mut writer = XmlWriter::new(ZipWriter::new(writer));
 

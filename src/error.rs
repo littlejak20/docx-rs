@@ -16,6 +16,8 @@ pub enum DocxError {
     #[cfg(feature = "async")]
     #[error("unable to unpack file: {0}")]
     AsyncZip(#[from] async_zip::error::ZipError),
+    #[error("DrawingML compatibility error: {0}")]
+    DrawingMLCompatibility(String),
 }
 
 /// Specialized `Result` which the error value is `DocxError`.

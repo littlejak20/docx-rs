@@ -18,6 +18,47 @@ pub struct Drawing<'a> {
     pub inline: Option<Inline<'a>>,
 }
 
+impl<'a> Drawing<'a> {
+    /// Converts complex/problematic DrawingML to simple, robust format for maximum Word compatibility
+    pub fn sanitize_for_compatibility(&mut self) -> crate::DocxResult<()> {
+        // Convert wp:anchor to wp:inline for compatibility
+        if let Some(anchor) = self.anchor.take() {
+            let inline = self.anchor_to_simple_inline(anchor)?;
+            self.inline = Some(inline);
+        }
+        Ok(())
+    }
+
+    /// Converts wp:anchor to wp:inline, preserving essential image data
+    fn anchor_to_simple_inline(&self, anchor: Anchor<'a>) -> crate::DocxResult<Inline<'a>> {
+        Ok(Inline {
+            // Preserve distances (margin from text)
+            dist_t: anchor.dist_t,
+            dist_b: anchor.dist_b,
+            dist_l: anchor.dist_l,
+            dist_r: anchor.dist_r,
+            
+            // Remove problematic positioning attributes for inline
+            simple_pos_attr: None,
+            relative_height: None,
+            behind_doc: None,
+            locked: None,
+            layout_in_cell: None,
+            allow_overlap: None,
+            
+            // Remove positioning (inline doesn't need complex positioning)
+            simple_pos: None,
+            position_horizontal: None,
+            position_vertical: None,
+            
+            // Preserve size and content
+            extent: anchor.extent,
+            doc_property: anchor.doc_property,
+            graphic: anchor.graphic,
+        })
+    }
+}
+
 #[derive(Debug, Default, XmlRead, XmlWrite, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 #[xml(tag = "wp:anchor")]
