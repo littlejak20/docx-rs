@@ -43,3 +43,4 @@ artifact-*.docx
 # Test
 tests/bbb
 tests/aaa/aa/
+.claude/
