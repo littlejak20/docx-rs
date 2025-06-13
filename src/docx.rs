@@ -152,6 +152,13 @@ impl<'a> Docx<'a> {
         Ok(())
     }
 
+    /// Repairs DrawingML corruption in existing documents (automatic repair for loaded files)
+    pub fn repair_drawingml_corruption(&mut self) -> DocxResult<()> {
+        // Apply the same sanitization logic used in write_file_compatible
+        // This ensures that loaded corrupted DOCX files are automatically repaired
+        self.sanitize_all_drawings()
+    }
+
     pub fn write<W: Write + Seek>(&'a mut self, writer: W) -> DocxResult<W> {
         let mut writer = XmlWriter::new(ZipWriter::new(writer));
 
@@ -802,7 +809,7 @@ impl DocxFile {
             .map(|(name, content)| (name.to_string(), Cow::Borrowed(content.as_slice())))
             .collect();
 
-        Ok(Docx {
+        let mut docx = Docx {
             app,
             content_types,
             core,
@@ -823,7 +830,15 @@ impl DocxFile {
             comments,
             numbering,
             custom_xml,
-        })
+        };
+
+        // Automatically repair DrawingML corruption when loading existing DOCX files
+        if let Err(e) = docx.repair_drawingml_corruption() {
+            // Log warning but don't fail the parse - file might still be usable
+            log::warn!("DrawingML repair failed during parse: {}", e);
+        }
+
+        Ok(docx)
     }
 }
 
