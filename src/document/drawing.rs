@@ -20,68 +20,34 @@ pub struct Drawing<'a> {
 
 impl<'a> Drawing<'a> {
     /// Converts complex/problematic DrawingML to simple, robust format for maximum Word compatibility
+    /// Option 3: Complete conversion to wp:inline (eliminates all positioning corruption)
     pub fn sanitize_for_compatibility(&mut self) -> crate::DocxResult<()> {
-        // Fix both anchor and inline positioning issues
         match self {
-            Drawing { anchor: Some(ref mut anchor), .. } => {
-                // Fix anchor positioning, then convert to inline
-                Self::fix_positioning_elements(
-                    &mut anchor.position_horizontal,
-                    &mut anchor.position_vertical,
-                );
-                
-                // Convert to inline for maximum compatibility
-                let fixed_anchor = anchor.clone();
-                let inline = self.anchor_to_simple_inline(fixed_anchor)?;
+            Drawing { anchor: Some(_), .. } => {
+                // Option 3: Always convert wp:anchor to wp:inline 
+                // This completely eliminates positioning corruption issues
+                let anchor = self.anchor.take().unwrap();
+                let inline = self.anchor_to_simple_inline(anchor)?;
                 *self = Drawing {
                     anchor: None,
                     inline: Some(inline),
                 };
             }
             Drawing { inline: Some(ref mut inline), .. } => {
-                // Fix inline positioning directly
-                Self::fix_positioning_elements(
-                    &mut inline.position_horizontal,
-                    &mut inline.position_vertical,
-                );
+                // Clean up any positioning in existing inline elements
+                // wp:inline should not have positioning elements
+                inline.position_horizontal = None;
+                inline.position_vertical = None;
+                inline.simple_pos = None;
             }
             _ => {} // No drawing elements to fix
         }
         Ok(())
     }
 
-    /// Fixes invalid positioning elements that make documents unopenable in Word
-    fn fix_positioning_elements(
-        position_h: &mut Option<PositionHorizontal>,
-        position_v: &mut Option<PositionVertical>,
-    ) {
-        // Fix positionH: remove if invalid (only relativeFrom, no posOffset)
-        if let Some(pos_h) = position_h {
-            if pos_h.pos_offset.is_none() {
-                // Invalid: only relativeFrom but no posOffset or align
-                // Remove completely - Word will use default positioning
-                *position_h = None;
-            }
-        }
-        
-        // Fix positionV: same logic
-        if let Some(pos_v) = position_v {
-            if pos_v.pos_offset.is_none() {
-                // Invalid: only relativeFrom but no posOffset
-                // Remove completely - Word will use default positioning  
-                *position_v = None;
-            }
-        }
-    }
 
-    /// Converts wp:anchor to wp:inline, preserving essential image data and valid positioning
-    fn anchor_to_simple_inline(&self, mut anchor: Anchor<'a>) -> crate::DocxResult<Inline<'a>> {
-        // First fix positioning in the anchor
-        Self::fix_positioning_elements(
-            &mut anchor.position_horizontal,
-            &mut anchor.position_vertical,
-        );
-        
+    /// Converts wp:anchor to wp:inline, preserving essential image data (Option 3: Complete conversion)
+    fn anchor_to_simple_inline(&self, anchor: Anchor<'a>) -> crate::DocxResult<Inline<'a>> {
         Ok(Inline {
             // Preserve distances (margin from text)
             dist_t: anchor.dist_t,
@@ -89,20 +55,18 @@ impl<'a> Drawing<'a> {
             dist_l: anchor.dist_l,
             dist_r: anchor.dist_r,
             
-            // Remove problematic positioning attributes for inline
+            // Remove ALL positioning - wp:inline doesn't need complex positioning
             simple_pos_attr: None,
             relative_height: None,
             behind_doc: None,
             locked: None,
             layout_in_cell: None,
             allow_overlap: None,
-            
-            // Keep positioning only if valid (fixed above)
             simple_pos: None,
-            position_horizontal: anchor.position_horizontal,
-            position_vertical: anchor.position_vertical,
+            position_horizontal: None,  // ← NO positioning in wp:inline
+            position_vertical: None,    // ← NO positioning in wp:inline
             
-            // Preserve size and content
+            // Preserve essential size and content
             extent: anchor.extent,
             doc_property: anchor.doc_property,
             graphic: anchor.graphic,
