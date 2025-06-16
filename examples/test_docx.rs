@@ -28,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_file = &args[1];
     let enable_text_replacement = args.contains(&"--replace".to_string());
     let keep_original_files = args.contains(&"--keep".to_string());
+    let fast_mode = args.contains(&"--fast".to_string());
     
     // Prüfe ob Datei existiert
     if !Path::new(input_file).exists() {
@@ -64,32 +65,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     
-    // Analyse der Datei
-    println!("\n🔍 ANALYSE DER DATEI:");
-    println!("═══════════════════════");
-    
-    let text = docx.document.body.text();
-    let paragraph_count = count_paragraphs(&docx);
-    let hyperlink_count = count_hyperlinks(&docx);
-    
-    println!("📊 Statistiken:");
-    println!("   📄 Paragraphs: {}", paragraph_count);
-    println!("   🔗 Hyperlinks: {}", hyperlink_count);
-    println!("   📝 Text-Länge: {} Zeichen", text.len());
-    
-    // Zeige ersten Teil des Textes
-    let preview = if text.len() > 200 {
-        format!("{}...", &text[..200])
+    // Analyse der Datei (überspringen im Fast-Mode)
+    let (text, _paragraph_count, hyperlink_count) = if fast_mode {
+        println!("\n⚡ FAST-MODE: Analyse übersprungen");
+        (String::new(), 0, 0)
     } else {
-        text.clone()
+        println!("\n🔍 ANALYSE DER DATEI:");
+        println!("═══════════════════════");
+        
+        let text = docx.document.body.text();
+        let paragraph_count = count_paragraphs(&docx);
+        let hyperlink_count = count_hyperlinks(&docx);
+        
+        println!("📊 Statistiken:");
+        println!("   📄 Paragraphs: {}", paragraph_count);
+        println!("   🔗 Hyperlinks: {}", hyperlink_count);
+        println!("   📝 Text-Länge: {} Zeichen", text.len());
+        
+        // Zeige ersten Teil des Textes
+        let preview = if text.len() > 200 {
+            format!("{}...", &text[..200])
+        } else {
+            text.clone()
+        };
+        println!("   👀 Vorschau: \"{}\"", preview);
+        
+        // Detaillierte Hyperlink-Analyse
+        if hyperlink_count > 0 {
+            println!("\n🔗 HYPERLINK-DETAILS:");
+            analyze_hyperlinks_detailed(&docx);
+        }
+        
+        (text, paragraph_count, hyperlink_count)
     };
-    println!("   👀 Vorschau: \"{}\"", preview);
-    
-    // Detaillierte Hyperlink-Analyse
-    if hyperlink_count > 0 {
-        println!("\n🔗 HYPERLINK-DETAILS:");
-        analyze_hyperlinks_detailed(&docx);
-    }
     
     // Text-Ersetzungen nur wenn aktiviert
     let mut replacement_count = 0;
@@ -111,19 +119,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ("Textmarke", "Bookmark"),
         ];
         
-        for (old, new) in &replacements {
-            if text.contains(old) {
-                println!("   🔄 Ersetze '{}' → '{}'", old, new);
+        if fast_mode {
+            // Fast-Mode: Alle Ersetzungen ohne Text-Check
+            for (old, new) in &replacements {
                 docx.document.body.replace_text_simple(old, new);
                 replacement_count += 1;
             }
+        } else {
+            // Standard: Nur ersetzen wenn Text gefunden
+            for (old, new) in &replacements {
+                if text.contains(old) {
+                    println!("   🔄 Ersetze '{}' → '{}'", old, new);
+                    docx.document.body.replace_text_simple(old, new);
+                    replacement_count += 1;
+                }
+            }
         }
         
-        if replacement_count == 0 {
+        if replacement_count == 0 && !fast_mode {
             println!("   ℹ️  Keine passenden Wörter für Ersetzung gefunden");
             println!("   🔄 Teste allgemeine Ersetzung...");
             docx.document.body.replace_text_simple("a", "a"); // Sichere Ersetzung
-        } else {
+        } else if !fast_mode {
             println!("   ✅ {} Ersetzungen durchgeführt", replacement_count);
         }
     } else {
@@ -162,45 +179,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     
-    // Verifikation - Kann die gespeicherte Datei wieder gelesen werden?
-    println!("\n🔍 VERIFIKATION:");
-    println!("═══════════════");
-    
-    match DocxFile::from_file(&output_file) {
-        Ok(verification_file) => {
-            match verification_file.parse() {
-                Ok(verification_docx) => {
-                    let final_text = verification_docx.document.body.text();
-                    println!("   ✅ Verarbeitete Datei kann wieder gelesen werden");
-                    println!("   📝 Finale Text-Länge: {} Zeichen", final_text.len());
-                    
-                    // Prüfe ob Ersetzungen funktioniert haben
-                    if enable_text_replacement {
-                        if replacement_count > 0 {
-                            let changes_detected = final_text.len() != text.len() || final_text != text;
-                            if changes_detected {
-                                println!("   ✅ Text-Ersetzungen wurden erfolgreich angewendet");
+    // Verifikation - Kann die gespeicherte Datei wieder gelesen werden? (überspringen im Fast-Mode)
+    if !fast_mode {
+        println!("\n🔍 VERIFIKATION:");
+        println!("═══════════════");
+        
+        match DocxFile::from_file(&output_file) {
+            Ok(verification_file) => {
+                match verification_file.parse() {
+                    Ok(verification_docx) => {
+                        let final_text = verification_docx.document.body.text();
+                        println!("   ✅ Verarbeitete Datei kann wieder gelesen werden");
+                        println!("   📝 Finale Text-Länge: {} Zeichen", final_text.len());
+                        
+                        // Prüfe ob Ersetzungen funktioniert haben
+                        if enable_text_replacement {
+                            if replacement_count > 0 {
+                                let changes_detected = final_text.len() != text.len() || final_text != text;
+                                if changes_detected {
+                                    println!("   ✅ Text-Ersetzungen wurden erfolgreich angewendet");
+                                } else {
+                                    println!("   ⚠️  Keine Text-Änderungen erkannt");
+                                }
+                            }
+                        } else {
+                            // Ohne Text-Ersetzung sollte der Text identisch sein
+                            if final_text == text {
+                                println!("   ✅ Dokument unverändert verarbeitet (wie erwartet)");
                             } else {
-                                println!("   ⚠️  Keine Text-Änderungen erkannt");
+                                println!("   ⚠️  Unerwartete Text-Änderungen erkannt");
                             }
                         }
-                    } else {
-                        // Ohne Text-Ersetzung sollte der Text identisch sein
-                        if final_text == text {
-                            println!("   ✅ Dokument unverändert verarbeitet (wie erwartet)");
-                        } else {
-                            println!("   ⚠️  Unerwartete Text-Änderungen erkannt");
-                        }
+                    }
+                    Err(e) => {
+                        println!("   ❌ Verarbeitete Datei kann nicht geparst werden: {}", e);
                     }
                 }
-                Err(e) => {
-                    println!("   ❌ Verarbeitete Datei kann nicht geparst werden: {}", e);
-                }
+            }
+            Err(e) => {
+                println!("   ❌ Verarbeitete Datei kann nicht geladen werden: {}", e);
             }
         }
-        Err(e) => {
-            println!("   ❌ Verarbeitete Datei kann nicht geladen werden: {}", e);
-        }
+    } else {
+        println!("\n⚡ FAST-MODE: Verifikation übersprungen");
     }
     
     // Abschluss
@@ -210,7 +231,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   📁 Verarbeitet: {}", output_file);
     println!("   💡 Öffne die verarbeitete Datei in Microsoft Word zum finalen Test");
     
-    if hyperlink_count > 0 {
+    if hyperlink_count > 0 && !fast_mode {
         println!("   🎯 Diese Datei enthält Hyperlinks - perfekt zum Testen des Fixes!");
     }
     
@@ -227,6 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
 fn print_help() {
     println!("USAGE:");
     println!("    test_docx [OPTIONS] <INPUT_FILE>");
@@ -237,13 +259,15 @@ fn print_help() {
     println!("OPTIONS:");
     println!("    --replace       Enable text replacements for testing");
     println!("    --keep          Preserve all original files (images, styles, etc.)");
+    println!("    --fast          Skip analysis and verification for faster processing");
     println!("    --help, -h      Print help information");
     println!();
     println!("EXAMPLES:");
     println!("    cargo run --example test_docx document.docx");
     println!("    cargo run --example test_docx document.docx --replace");
     println!("    cargo run --example test_docx document.docx --keep");
-    println!("    cargo run --example test_docx document.docx --replace --keep");
+    println!("    cargo run --example test_docx document.docx --fast");
+    println!("    cargo run --example test_docx document.docx --replace --keep --fast");
 }
 
 fn count_paragraphs(docx: &Docx) -> usize {
