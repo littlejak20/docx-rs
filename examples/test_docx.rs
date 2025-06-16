@@ -11,18 +11,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Argumente von Kommandozeile lesen
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        println!("❌ Fehler: Kein Dateiname angegeben");
-        println!("📖 Verwendung: cargo run --example test_docx DATEINAME.docx [--replace]");
-        println!("📖 Beispiel: cargo run --example test_docx test.docx");
-        println!("📖 Mit Text-Ersetzung: cargo run --example test_docx test.docx --replace");
+    
+    // Prüfe auf --help
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
+        print_help();
         return Ok(());
     }
     
-    // Prüfe ob Text-Ersetzung aktiviert werden soll
-    let enable_text_replacement = args.len() > 2 && args[2] == "--replace";
+    if args.len() < 2 {
+        println!("❌ Fehler: Kein Dateiname angegeben\n");
+        print_help();
+        return Ok(());
+    }
     
+    // Parse Parameter
     let input_file = &args[1];
+    let enable_text_replacement = args.contains(&"--replace".to_string());
+    let keep_original_files = args.contains(&"--keep".to_string());
     
     // Prüfe ob Datei existiert
     if !Path::new(input_file).exists() {
@@ -126,21 +131,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("═══════════════════");
         println!("   ⚪ Text-Ersetzung ist deaktiviert (Standard)");
         println!("   💡 Zum Aktivieren: --replace Parameter verwenden");
-        println!("   📖 Beispiel: cargo run --example test_docx test.docx --replace");
     }
     
-    // Speichern
+    // Speichern - Weiche zwischen den Modi
     println!("\n💾 SPEICHERE VERARBEITETE DATEI:");
     println!("═══════════════════════════════");
     println!("   📁 Speichere als: {}", output_file);
     
-    match write_docx_preserving_original_files(&docx, input_file, &output_file) {
-        Ok(_) => {
-            println!("   ✅ Datei erfolgreich gespeichert (alle Original-Dateien erhalten)");
+    if keep_original_files {
+        println!("   🗂️  Modus: Original-Dateien beibehalten (--keep aktiviert)");
+        match write_docx_preserving_original_files(&docx, input_file, &output_file) {
+            Ok(_) => {
+                println!("   ✅ Datei erfolgreich gespeichert (alle Original-Dateien erhalten)");
+            }
+            Err(e) => {
+                println!("   ❌ Fehler beim Speichern: {}", e);
+                return Err(e.into());
+            }
         }
-        Err(e) => {
-            println!("   ❌ Fehler beim Speichern: {}", e);
-            return Err(e.into());
+    } else {
+        println!("   📄 Modus: Standard (nur verarbeitete DOCX)");
+        match docx.write_file(&output_file) {
+            Ok(_) => {
+                println!("   ✅ Datei erfolgreich gespeichert");
+            }
+            Err(e) => {
+                println!("   ❌ Fehler beim Speichern: {}", e);
+                return Err(e.into());
+            }
         }
     }
     
@@ -198,10 +216,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     if !enable_text_replacement {
         println!("   📝 Dokument wurde UNVERÄNDERT verarbeitet (keine Text-Ersetzungen)");
-        println!("   💡 Für Text-Ersetzungs-Tests: --replace Parameter verwenden");
+    }
+    
+    if keep_original_files {
+        println!("   🗂️  Original-Dateien (Bilder, Styles, etc.) wurden beibehalten");
+    } else {
+        println!("   📄 Nur verarbeitete DOCX ohne Original-Assets");
     }
     
     Ok(())
+}
+
+fn print_help() {
+    println!("USAGE:");
+    println!("    test_docx [OPTIONS] <INPUT_FILE>");
+    println!();
+    println!("ARGS:");
+    println!("    <INPUT_FILE>    The DOCX file to process");
+    println!();
+    println!("OPTIONS:");
+    println!("    --replace       Enable text replacements for testing");
+    println!("    --keep          Preserve all original files (images, styles, etc.)");
+    println!("    --help, -h      Print help information");
+    println!();
+    println!("EXAMPLES:");
+    println!("    cargo run --example test_docx document.docx");
+    println!("    cargo run --example test_docx document.docx --replace");
+    println!("    cargo run --example test_docx document.docx --keep");
+    println!("    cargo run --example test_docx document.docx --replace --keep");
 }
 
 fn count_paragraphs(docx: &Docx) -> usize {
