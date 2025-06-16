@@ -26,9 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Parse Parameter
     let input_file = &args[1];
-    let enable_text_replacement = args.contains(&"--replace".to_string());
-    let keep_original_files = args.contains(&"--keep".to_string());
-    let fast_mode = args.contains(&"--fast".to_string());
+    let flags = parse_flags(&args[2..]);
+    let enable_text_replacement = flags.replace;
+    let keep_original_files = flags.keep;
+    let fast_mode = flags.fast;
     
     // Prüfe ob Datei existiert
     if !Path::new(input_file).exists() {
@@ -248,6 +249,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Debug, Default)]
+struct Flags {
+    replace: bool,
+    keep: bool,
+    fast: bool,
+}
+
+fn parse_flags(args: &[String]) -> Flags {
+    let mut flags = Flags::default();
+    
+    for arg in args {
+        match arg.as_str() {
+            // Langformen
+            "--replace" => flags.replace = true,
+            "--keep" => flags.keep = true,
+            "--fast" => flags.fast = true,
+            "--help" | "-h" => {}, // Bereits behandelt
+            
+            // Kurzformen und Kombinationen
+            arg if arg.starts_with('-') && !arg.starts_with("--") => {
+                // Entferne das '-' und parse jeden Buchstaben
+                for ch in arg.chars().skip(1) {
+                    match ch {
+                        'r' => flags.replace = true,
+                        'k' => flags.keep = true,
+                        'f' => flags.fast = true,
+                        'h' => {}, // Bereits behandelt
+                        _ => {
+                            println!("⚠️  Unbekannte Option: -{}", ch);
+                        }
+                    }
+                }
+            }
+            
+            _ => {
+                if !arg.is_empty() {
+                    println!("⚠️  Unbekannter Parameter: {}", arg);
+                }
+            }
+        }
+    }
+    
+    flags
+}
 
 fn print_help() {
     println!("USAGE:");
@@ -257,17 +302,18 @@ fn print_help() {
     println!("    <INPUT_FILE>    The DOCX file to process");
     println!();
     println!("OPTIONS:");
-    println!("    --replace       Enable text replacements for testing");
-    println!("    --keep          Preserve all original files (images, styles, etc.)");
-    println!("    --fast          Skip analysis and verification for faster processing");
-    println!("    --help, -h      Print help information");
+    println!("    -r, --replace   Enable text replacements for testing");
+    println!("    -k, --keep      Preserve all original files (images, styles, etc.)");
+    println!("    -f, --fast      Skip analysis and verification for faster processing");
+    println!("    -h, --help      Print help information");
     println!();
     println!("EXAMPLES:");
     println!("    cargo run --example test_docx document.docx");
     println!("    cargo run --example test_docx document.docx --replace");
-    println!("    cargo run --example test_docx document.docx --keep");
-    println!("    cargo run --example test_docx document.docx --fast");
+    println!("    cargo run --example test_docx document.docx -r");
+    println!("    cargo run --example test_docx document.docx -rfk");
     println!("    cargo run --example test_docx document.docx --replace --keep --fast");
+    println!("    cargo run --example test_docx document.docx -r --keep -f");
 }
 
 fn count_paragraphs(docx: &Docx) -> usize {
