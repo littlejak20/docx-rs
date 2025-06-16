@@ -1,6 +1,9 @@
 use docx_rust::*;
 use std::env;
 use std::path::Path;
+use std::fs::File;
+use std::io::Cursor;
+use zip::{ZipArchive, ZipWriter};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 DOCX Hyperlink-Fix Tester");
@@ -131,9 +134,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════");
     println!("   📁 Speichere als: {}", output_file);
     
-    match docx.write_file(&output_file) {
+    match write_docx_preserving_original_files(&docx, input_file, &output_file) {
         Ok(_) => {
-            println!("   ✅ Datei erfolgreich gespeichert");
+            println!("   ✅ Datei erfolgreich gespeichert (alle Original-Dateien erhalten)");
         }
         Err(e) => {
             println!("   ❌ Fehler beim Speichern: {}", e);
@@ -272,4 +275,49 @@ fn truncate_text(text: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &text[..max_len])
     }
+}
+
+fn write_docx_preserving_original_files(
+    docx: &Docx, 
+    original_file: &str, 
+    output_file: &str
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Ermittle Original-Dateigröße für Capacity-Optimierung
+    let orig_size = std::fs::metadata(original_file)?.len() as usize;
+    
+    // Klone das DOCX-Objekt und schreibe es in einen temporären Buffer
+    let mut docx_clone = docx.clone();
+    let docx_reassembled_writer = Cursor::new(Vec::with_capacity(orig_size));
+    let finished_writer = docx_clone.write(docx_reassembled_writer)?;
+    
+    // Öffne die verarbeitete DOCX als ZIP-Archiv
+    let mut reassembled_zip_archive = ZipArchive::new(finished_writer)?;
+    
+    // Öffne die Original-DOCX als ZIP-Archiv
+    let original_zip_file = File::open(original_file)?;
+    let mut original_zip = ZipArchive::new(original_zip_file)?;
+    let original_file_names = original_zip.file_names().map(String::from).collect::<Vec<_>>();
+    
+    // Erstelle die neue DOCX-Datei als ZIP-Archiv mit optimierter Capacity
+    let output_zip_file = File::create(output_file)?;
+    let mut new_zip = ZipWriter::new(output_zip_file);
+    
+    // Kopiere alle Dateien: Original-Dateien außer word/document.xml, diese aus der verarbeiteten Version
+    for file_name in original_file_names.into_iter() {
+        let zip_file = if file_name == "word/document.xml" {
+            // Nimm die verarbeitete word/document.xml (mit DrawingML-Fixes)
+            reassembled_zip_archive.by_name("word/document.xml")?
+        } else {
+            // Nimm alle anderen Dateien aus der Original-DOCX
+            original_zip.by_name(&file_name)?
+        };
+        
+        // Kopiere die Datei direkt (behält Kompression und Metadaten bei)
+        new_zip.raw_copy_file(zip_file)?;
+    }
+    
+    // Schließe das ZIP-Archiv
+    new_zip.finish()?;
+    
+    Ok(())
 }
