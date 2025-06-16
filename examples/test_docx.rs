@@ -4,6 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Cursor;
 use zip::{ZipArchive, ZipWriter};
+use chrono::Local;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 DOCX Hyperlink-Fix Tester");
@@ -38,8 +39,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     
-    let output_file = format!("{}-processed.docx", 
-        input_file.strip_suffix(".docx").unwrap_or(input_file));
+    let base_name = input_file.strip_suffix(".docx").unwrap_or(input_file);
+    let timestamp = Local::now();
+    let date = timestamp.format("%Y%m%d");
+    let time = timestamp.format("%H%M%S");
+    let output_file = format!("{}_processed_{}_{}.docx", base_name, date, time);
     
     println!("📄 Lade Datei: {}", input_file);
     
