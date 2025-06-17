@@ -33,14 +33,7 @@ impl<'a> Drawing<'a> {
                     inline: Some(inline),
                 };
             }
-            Drawing { inline: Some(ref mut inline), .. } => {
-                // Clean up any positioning in existing inline elements
-                // wp:inline should not have positioning elements
-                inline.position_horizontal = None;
-                inline.position_vertical = None;
-                inline.simple_pos = None;
-            }
-            _ => {} // No drawing elements to fix
+            _ => {} // wp:inline elements are already safe, no changes needed
         }
         Ok(())
     }
