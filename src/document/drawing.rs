@@ -260,11 +260,17 @@ pub struct WrapPolygonLineTo {
 pub enum WrapTextType {
     #[default]
     Both,
+    Left,
+    Right,
+    Largest,
 }
 
 __string_enum! {
     WrapTextType {
     Both = "bothSides",
+    Left = "left",
+    Right = "right", 
+    Largest = "largest",
 }}
 
 #[derive(Debug, Default, XmlRead, XmlWrite, Clone)]
