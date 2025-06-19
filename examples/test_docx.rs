@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     
-    let mut docx = match docx_file.parse() {
+    let mut docx = match docx_file.parse_safe() {
         Ok(doc) => {
             println!("✅ Datei erfolgreich geparst");
             doc
@@ -191,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         match DocxFile::from_file(&output_file) {
             Ok(verification_file) => {
-                match verification_file.parse() {
+                match verification_file.parse_safe() {
                     Ok(verification_docx) => {
                         let final_text = verification_docx.document.body.text();
                         println!("   ✅ Verarbeitete Datei kann wieder gelesen werden");

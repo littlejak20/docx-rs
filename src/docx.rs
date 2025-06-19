@@ -646,7 +646,10 @@ impl DocxFile {
         Self::from_reader(File::open(path)?)
     }
 
-    /// Parses content into `Docx` struct
+    /// Parses content into `Docx` struct without DrawingML repair
+    /// 
+    /// This method preserves the original DrawingML structures as-is.
+    /// Use `parse_safe()` if you want automatic DrawingML corruption repair.
     pub fn parse(&self) -> DocxResult<Docx<'_>> {
         let app = if let Some(content) = &self.app {
             Some(App::from_str(content)?)
@@ -809,7 +812,7 @@ impl DocxFile {
             .map(|(name, content)| (name.to_string(), Cow::Borrowed(content.as_slice())))
             .collect();
 
-        let mut docx = Docx {
+        Ok(Docx {
             app,
             content_types,
             core,
@@ -830,14 +833,25 @@ impl DocxFile {
             comments,
             numbering,
             custom_xml,
-        };
+        })
+    }
 
-        // Automatically repair DrawingML corruption when loading existing DOCX files
+    /// Parses content into `Docx` struct with automatic DrawingML repair (recommended)
+    /// 
+    /// This method automatically fixes DrawingML corruption issues that could make
+    /// the document unopenable in Microsoft Word. It converts complex wp:anchor
+    /// elements to simple wp:inline format for maximum compatibility.
+    /// 
+    /// Use `parse()` if you need to preserve original DrawingML structures.
+    pub fn parse_safe(&self) -> DocxResult<Docx<'_>> {
+        let mut docx = self.parse()?;
+        
+        // Apply DrawingML corruption repair
         if let Err(e) = docx.repair_drawingml_corruption() {
             // Log warning but don't fail the parse - file might still be usable
-            log::warn!("DrawingML repair failed during parse: {}", e);
+            log::warn!("DrawingML repair failed during parse_safe: {}", e);
         }
-
+        
         Ok(docx)
     }
 }
